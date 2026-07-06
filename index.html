@@ -1,0 +1,941 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="HONDANA">
+<title>HONDANA - 本の貸出管理</title>
+<script src="https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js"></script>
+<style>
+  :root {
+    --cream: #F7F4EF;
+    --red: #C8392B;
+    --gold: #B8965A;
+    --ink: #3A322B;
+    --sub: #8A8177;
+    --white: #FFFFFF;
+    --line: #EAE5DC;
+    --green-ok: #6B8F5E;
+    --sat: env(safe-area-inset-top, 0px);
+    --sab: env(safe-area-inset-bottom, 0px);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { background: var(--cream); color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", sans-serif; }
+  body { max-width: 390px; margin: 0 auto; min-height: 100vh; padding-bottom: calc(70px + var(--sab)); }
+
+  /* ===== ヘッダー ===== */
+  header { position: sticky; top: 0; z-index: 50; background: var(--cream);
+    padding: calc(14px + var(--sat)) 16px 10px; display: flex; align-items: center; justify-content: space-between;
+    border-bottom: 1px solid var(--line); }
+  .logo { font-size: 22px; font-weight: 800; letter-spacing: 2px; }
+  .logo .da { color: var(--red); }
+  .logo .icon { font-size: 18px; margin-right: 6px; }
+  #adminBtn { background: none; border: none; font-size: 20px; color: var(--sub); padding: 6px; cursor: pointer; }
+  #adminBtn.on { color: var(--red); }
+
+  /* ===== 共通 ===== */
+  main { padding: 16px; }
+  .card { background: var(--white); border-radius: 14px; padding: 16px; margin-bottom: 14px;
+    box-shadow: 0 1px 4px rgba(58,50,43,.06); }
+  h2 { font-size: 15px; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+  h2 .bar { display: inline-block; width: 4px; height: 16px; background: var(--gold); border-radius: 2px; }
+  .muted { color: var(--sub); font-size: 12px; }
+  .btn { display: inline-block; border: none; border-radius: 10px; padding: 12px 18px; font-size: 14px;
+    font-weight: 700; cursor: pointer; text-align: center; }
+  .btn-red { background: var(--red); color: #fff; }
+  .btn-gold { background: var(--gold); color: #fff; }
+  .btn-ghost { background: var(--cream); color: var(--ink); }
+  .btn-sm { padding: 8px 12px; font-size: 12px; border-radius: 8px; }
+  .btn-block { display: block; width: 100%; }
+  .btn:disabled { opacity: .4; }
+  input, select, textarea { width: 100%; padding: 12px; border: 1px solid var(--line); border-radius: 10px;
+    font-size: 16px; background: var(--white); color: var(--ink); font-family: inherit; }
+  textarea { resize: vertical; min-height: 72px; }
+  label { display: block; font-size: 12px; font-weight: 700; margin: 12px 0 5px; color: var(--sub); }
+  label .req { color: var(--red); }
+
+  .badge { display: inline-block; font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 99px; }
+  .badge-ok { background: #EDF3EA; color: var(--green-ok); }
+  .badge-out { background: #F9E9E7; color: var(--red); }
+  .badge-gold { background: #F4EDE1; color: var(--gold); }
+
+  /* ===== 下部ナビ ===== */
+  nav { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 390px;
+    background: var(--white); border-top: 1px solid var(--line); display: flex; z-index: 50;
+    padding-bottom: var(--sab); }
+  nav button { flex: 1; background: none; border: none; padding: 9px 0 7px; font-size: 10px; color: var(--sub);
+    cursor: pointer; font-weight: 600; }
+  nav button .ic { display: block; font-size: 19px; margin-bottom: 2px; }
+  nav button.active { color: var(--red); }
+  nav button.hidden { display: none; }
+
+  /* ===== 本棚 ===== */
+  .tabs { display: flex; gap: 8px; margin-bottom: 12px; }
+  .tabs button { flex: 1; padding: 10px; border: none; border-radius: 10px; font-size: 13px; font-weight: 700;
+    background: var(--white); color: var(--sub); cursor: pointer; }
+  .tabs button.on-avail { background: var(--green-ok); color: #fff; }
+  .tabs button.on-loan { background: var(--red); color: #fff; }
+  .chips { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 8px; margin-bottom: 6px; -webkit-overflow-scrolling: touch; }
+  .chips button { flex: 0 0 auto; padding: 7px 13px; border: none; border-radius: 99px; font-size: 12px;
+    background: var(--white); color: var(--sub); font-weight: 600; cursor: pointer; }
+  .chips button.on { background: var(--gold); color: #fff; }
+  .bookgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .book { background: var(--white); border-radius: 12px; overflow: hidden; cursor: pointer;
+    box-shadow: 0 1px 4px rgba(58,50,43,.06); }
+  .book .cover { width: 100%; aspect-ratio: 2/2.9; background: var(--line); object-fit: cover; display: block; }
+  .book .cover.noimg { display: flex; align-items: center; justify-content: center; font-size: 30px; color: var(--sub); }
+  .book .info { padding: 9px 10px 11px; }
+  .book .title { font-size: 12px; font-weight: 700; line-height: 1.35; margin-bottom: 3px;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .book .author { font-size: 10px; color: var(--sub); margin-bottom: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* ===== モーダル ===== */
+  .overlay { position: fixed; inset: 0; background: rgba(58,50,43,.45); z-index: 100; display: none;
+    align-items: flex-end; justify-content: center; }
+  .overlay.show { display: flex; }
+  .sheet { background: var(--cream); width: 100%; max-width: 390px; max-height: 88vh; overflow-y: auto;
+    border-radius: 18px 18px 0 0; padding: 18px 16px calc(24px + var(--sab)); -webkit-overflow-scrolling: touch; }
+  .sheet .handle { width: 40px; height: 4px; background: var(--line); border-radius: 2px; margin: 0 auto 14px; }
+  .stars { display: flex; gap: 8px; justify-content: center; margin: 10px 0; }
+  .stars span { font-size: 32px; color: var(--line); cursor: pointer; }
+  .stars span.on { color: var(--gold); }
+  .star-inline { color: var(--gold); font-size: 12px; }
+
+  /* ===== スキャナ ===== */
+  #scanBox { position: fixed; inset: 0; background: #000; z-index: 200; display: none; flex-direction: column; }
+  #scanBox.show { display: flex; }
+  #scanVideo { flex: 1; object-fit: cover; width: 100%; }
+  #scanBox .close { position: absolute; top: calc(14px + var(--sat)); right: 14px; background: rgba(0,0,0,.5);
+    color: #fff; border: none; border-radius: 99px; width: 40px; height: 40px; font-size: 18px; }
+  #scanBox .hint { position: absolute; bottom: calc(40px + var(--sab)); left: 0; right: 0; text-align: center;
+    color: #fff; font-size: 13px; text-shadow: 0 1px 3px rgba(0,0,0,.7); }
+
+  /* ===== その他 ===== */
+  #toast { position: fixed; bottom: calc(84px + var(--sab)); left: 50%; transform: translateX(-50%);
+    background: var(--ink); color: #fff; padding: 11px 20px; border-radius: 99px; font-size: 13px;
+    z-index: 300; opacity: 0; transition: opacity .25s; pointer-events: none; max-width: 340px; text-align: center; }
+  #toast.show { opacity: 1; }
+  #loading { position: fixed; inset: 0; background: rgba(247,244,239,.7); z-index: 250; display: none;
+    align-items: center; justify-content: center; }
+  #loading.show { display: flex; }
+  .spinner { width: 34px; height: 34px; border: 4px solid var(--line); border-top-color: var(--red);
+    border-radius: 50%; animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .stat3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+  .stat3 .card { text-align: center; margin: 0; padding: 13px 4px; }
+  .stat3 .num { font-size: 21px; font-weight: 800; color: var(--red); }
+  .stat3 .lbl { font-size: 10px; color: var(--sub); margin-top: 2px; }
+  .row { display: flex; align-items: center; gap: 10px; }
+  .row .grow { flex: 1; min-width: 0; }
+  .loanitem { padding: 11px 0; border-bottom: 1px solid var(--line); }
+  .loanitem:last-child { border-bottom: none; }
+  .loanitem .t { font-size: 13px; font-weight: 700; margin-bottom: 3px; }
+  .rankno { width: 28px; height: 28px; border-radius: 99px; background: var(--cream); color: var(--sub);
+    font-weight: 800; font-size: 13px; display: flex; align-items: center; justify-content: center; flex: 0 0 28px; }
+  .rankno.top1 { background: var(--red); color: #fff; }
+  .rankno.top2 { background: var(--gold); color: #fff; }
+  .rankno.top3 { background: #D8C9A9; color: #fff; }
+  .empty { text-align: center; color: var(--sub); font-size: 13px; padding: 28px 0; }
+  .view { display: none; }
+  .view.show { display: block; }
+  .detail-cover { width: 110px; border-radius: 8px; box-shadow: 0 2px 8px rgba(58,50,43,.18); }
+  .kv { font-size: 12px; color: var(--sub); line-height: 1.9; }
+  .kv b { color: var(--ink); }
+  .adminsec { margin-bottom: 8px; }
+  .warn { background: #F9E9E7; color: var(--red); border-radius: 10px; padding: 11px 13px; font-size: 12px;
+    font-weight: 700; margin-bottom: 14px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo"><span class="icon">📚</span>HON<span class="da">DA</span>NA</div>
+  <button id="adminBtn" onclick="onAdminBtn()" aria-label="管理者モード">⚙︎</button>
+</header>
+
+<main>
+  <!-- ===== 初回登録 ===== -->
+  <section id="view-register" class="view">
+    <div class="card" style="margin-top:24px">
+      <h2><span class="bar"></span>利用登録</h2>
+      <p class="muted">HONDANAへようこそ!<br>はじめての方は名前とメールアドレスを登録してください(通知に使用します)。</p>
+      <label>名前 <span class="req">*</span></label>
+      <input id="regName" placeholder="例:安西 湊" autocomplete="name">
+      <label>メールアドレス <span class="req">*</span></label>
+      <input id="regEmail" type="email" placeholder="例:you@example.com" autocomplete="email">
+      <div style="margin-top:18px">
+        <button class="btn btn-red btn-block" onclick="doRegister()">登録してはじめる</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== ホーム ===== -->
+  <section id="view-home" class="view"></section>
+
+  <!-- ===== 本棚 ===== -->
+  <section id="view-shelf" class="view">
+    <input id="q" placeholder="タイトル・著者で検索" style="margin-bottom:10px" oninput="renderShelf()">
+    <div class="chips" id="genreChips"></div>
+    <div class="tabs">
+      <button id="tabAvail" onclick="setShelfTab('avail')">貸出可能</button>
+      <button id="tabLoan" onclick="setShelfTab('loan')">貸出中</button>
+    </div>
+    <div id="shelfGrid" class="bookgrid"></div>
+    <div id="shelfEmpty" class="empty" style="display:none">該当する本がありません</div>
+  </section>
+
+  <!-- ===== ランキング ===== -->
+  <section id="view-ranking" class="view">
+    <div class="card"><h2><span class="bar"></span>貸出ランキング TOP10</h2><div id="rankList"></div></div>
+  </section>
+
+  <!-- ===== リクエスト ===== -->
+  <section id="view-request" class="view">
+    <div class="card">
+      <h2><span class="bar"></span>入荷リクエスト</h2>
+      <label>読みたい本のタイトル <span class="req">*</span></label>
+      <input id="reqTitle" placeholder="例:○○の教科書">
+      <label>理由(任意)</label>
+      <textarea id="reqReason" placeholder="なぜ読みたいか、おすすめ理由など"></textarea>
+      <div style="margin-top:14px">
+        <button class="btn btn-gold btn-block" onclick="sendRequest()">リクエストを送る</button>
+      </div>
+    </div>
+    <div class="card"><h2><span class="bar"></span>自分のリクエスト</h2><div id="myRequests"></div></div>
+  </section>
+
+  <!-- ===== マイページ ===== -->
+  <section id="view-mypage" class="view"></section>
+
+  <!-- ===== 管理者 ===== -->
+  <section id="view-admin" class="view"></section>
+</main>
+
+<nav id="nav">
+  <button data-v="home" onclick="show('home')"><span class="ic">🏠</span>ホーム</button>
+  <button data-v="shelf" onclick="show('shelf')"><span class="ic">📚</span>本棚</button>
+  <button data-v="ranking" onclick="show('ranking')"><span class="ic">🏆</span>ランキング</button>
+  <button data-v="request" onclick="show('request')"><span class="ic">💌</span>リクエスト</button>
+  <button data-v="mypage" onclick="show('mypage')"><span class="ic">👤</span>マイページ</button>
+  <button data-v="admin" class="hidden" onclick="show('admin')"><span class="ic">🔧</span>管理</button>
+</nav>
+
+<!-- 本詳細モーダル -->
+<div class="overlay" id="ovDetail" onclick="if(event.target===this)hide('ovDetail')">
+  <div class="sheet"><div class="handle"></div><div id="detailBody"></div></div>
+</div>
+
+<!-- 返却(★評価)モーダル -->
+<div class="overlay" id="ovReturn" onclick="if(event.target===this)hide('ovReturn')">
+  <div class="sheet"><div class="handle"></div>
+    <h2><span class="bar"></span>返却の手続き</h2>
+    <p class="muted" id="retTitle"></p>
+    <p style="font-size:13px;font-weight:700;margin-top:14px;text-align:center">よかったら★と感想を教えてください(任意)</p>
+    <div class="stars" id="retStars"></div>
+    <textarea id="retComment" placeholder="ひとこと感想(任意)"></textarea>
+    <div style="display:flex;gap:10px;margin-top:14px">
+      <button class="btn btn-ghost" style="flex:1" onclick="submitReturn(false)">評価せず返却</button>
+      <button class="btn btn-red" style="flex:1" onclick="submitReturn(true)">返却する</button>
+    </div>
+  </div>
+</div>
+
+<!-- 管理者ログインモーダル -->
+<div class="overlay" id="ovAdmin" onclick="if(event.target===this)hide('ovAdmin')">
+  <div class="sheet"><div class="handle"></div>
+    <h2><span class="bar"></span>管理者モード</h2>
+    <label>パスワード</label>
+    <input id="adminPw" type="password" placeholder="管理者パスワード">
+    <div style="margin-top:14px">
+      <button class="btn btn-red btn-block" onclick="adminLogin()">ログイン</button>
+    </div>
+  </div>
+</div>
+
+<!-- バーコードスキャナ -->
+<div id="scanBox">
+  <video id="scanVideo" playsinline></video>
+  <button class="close" onclick="stopScan()">✕</button>
+  <div class="hint">本の裏のバーコード(978ではじまる方)を写してください</div>
+</div>
+
+<div id="toast"></div>
+<div id="loading"><div class="spinner"></div></div>
+
+<script>
+/* ============================================================
+   HONDANA v2  設定
+   GAS_URL: Apps Scriptをウェブアプリとしてデプロイして得たURLを設定
+   ============================================================ */
+var GAS_URL = 'https://script.google.com/macros/s/AKfycbwLjqMRIGqbAcYOyKoClIbxapNk59izs1kfJgc4MoBtOWtElVPb0ECttIhhtG0q1i5E4g/exec';
+
+var GENRES = ['文学・文芸', 'ビジネス・経済', '趣味・実用', '専門・学術', 'その他'];
+
+var state = {
+  user: null,          // {userId, name, email}
+  data: null,          // getAllの結果
+  view: 'home',
+  shelfTab: 'avail',
+  genre: 'すべて',
+  retLoanId: null,
+  retRating: 0,
+  admin: sessionStorage.getItem('hondana_admin') || '',
+  editIsbn: null,
+  scanTarget: null,
+  scanner: null
+};
+
+/* ---------- 通信 ---------- */
+function api(action, payload, silent) {
+  if (!GAS_URL) {
+    toast('GAS_URLが未設定です(index.html内で設定してください)');
+    return Promise.reject(new Error('GAS_URL未設定'));
+  }
+  if (!silent) loading(true);
+  var body = Object.assign({ action: action }, payload || {});
+  return fetch(GAS_URL, { method: 'POST', body: JSON.stringify(body) })
+    .then(function (r) { return r.json(); })
+    .then(function (res) {
+      if (!res.ok) throw new Error(res.error || 'エラーが発生しました');
+      return res;
+    })
+    .finally(function () { if (!silent) loading(false); });
+}
+
+function loadAll() {
+  return api('getAll', { userId: state.user ? state.user.userId : '' }).then(function (res) {
+    state.data = res;
+    render();
+  }).catch(function (e) { toast(e.message); });
+}
+
+/* ---------- ユーティリティ ---------- */
+function $(id) { return document.getElementById(id); }
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+function toast(msg) {
+  var t = $('toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(t._tm); t._tm = setTimeout(function () { t.classList.remove('show'); }, 2600);
+}
+function loading(on) { $('loading').classList.toggle('show', !!on); }
+function hide(id) { $(id).classList.remove('show'); }
+function showOv(id) { $(id).classList.add('show'); }
+function fmtDate(s) { return s ? String(s).replace(/-/g, '/') : ''; }
+function todayStr() { return state.data ? state.data.today : new Date().toISOString().slice(0, 10); }
+function daysLeft(due) {
+  return Math.round((new Date(due + 'T00:00:00') - new Date(todayStr() + 'T00:00:00')) / 86400000);
+}
+function dueBadge(due) {
+  var d = daysLeft(due);
+  if (d < 0) return '<span class="badge badge-out">' + (-d) + '日超過</span>';
+  if (d <= 2) return '<span class="badge badge-out">あと' + d + '日で返却</span>';
+  return '<span class="badge badge-gold">あと' + d + '日で返却</span>';
+}
+function starsTxt(n) {
+  n = Math.round(n);
+  var s = '';
+  for (var i = 1; i <= 5; i++) s += i <= n ? '★' : '☆';
+  return s;
+}
+
+/* ---------- データ参照 ---------- */
+function activeLoans() {
+  return (state.data.loans || []).filter(function (l) { return !l['返却日']; });
+}
+function loanOf(isbn) {
+  return activeLoans().filter(function (l) { return String(l['ISBN']) === String(isbn); })[0] || null;
+}
+function myLoans() {
+  return activeLoans().filter(function (l) { return l['ユーザーID'] === state.user.userId; });
+}
+function myReserves() {
+  return (state.data.reservations || []).filter(function (r) { return r['ユーザーID'] === state.user.userId; });
+}
+function bookOf(isbn) {
+  return (state.data.books || []).filter(function (b) { return String(b['ISBN']) === String(isbn); })[0] || null;
+}
+function reviewsOf(isbn) {
+  return (state.data.reviews || []).filter(function (r) { return String(r['ISBN']) === String(isbn); });
+}
+function avgRating(isbn) {
+  var rs = reviewsOf(isbn);
+  if (!rs.length) return 0;
+  return rs.reduce(function (a, r) { return a + Number(r['★'] || 0); }, 0) / rs.length;
+}
+function loanCount(isbn) {
+  return (state.data.loans || []).filter(function (l) { return String(l['ISBN']) === String(isbn); }).length;
+}
+function userName(id) { return (state.data.users || {})[id] || '不明'; }
+
+/* ---------- 画面切替 ---------- */
+function show(v) {
+  state.view = v;
+  document.querySelectorAll('.view').forEach(function (el) { el.classList.remove('show'); });
+  $('view-' + v).classList.add('show');
+  document.querySelectorAll('nav button').forEach(function (b) {
+    b.classList.toggle('active', b.dataset.v === v);
+  });
+  render();
+  window.scrollTo(0, 0);
+}
+
+function render() {
+  if (!state.data) return;
+  if (state.view === 'home') renderHome();
+  if (state.view === 'shelf') renderShelf();
+  if (state.view === 'ranking') renderRanking();
+  if (state.view === 'request') renderRequests();
+  if (state.view === 'mypage') renderMyPage();
+  if (state.view === 'admin') renderAdmin();
+}
+
+/* ---------- 登録 ---------- */
+function doRegister() {
+  var name = $('regName').value.trim();
+  var email = $('regEmail').value.trim();
+  if (!name || !email) { toast('名前とメールアドレスを入力してください'); return; }
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { toast('メールアドレスの形式が正しくありません'); return; }
+  api('register', { name: name, email: email }).then(function (res) {
+    state.user = { userId: res.userId, name: res.name, email: email };
+    localStorage.setItem('hondana_user', JSON.stringify(state.user));
+    $('nav').style.display = '';
+    toast('ようこそ、' + res.name + 'さん!');
+    show('home');
+    loadAll();
+  }).catch(function (e) { toast(e.message); });
+}
+
+/* ---------- ホーム ---------- */
+function renderHome() {
+  var d = state.data;
+  var act = activeLoans();
+  var mine = myLoans();
+  var overdue = mine.filter(function (l) { return daysLeft(l['返却期限']) < 0; });
+  var html = '<p style="font-size:14px;font-weight:700;margin-bottom:12px">こんにちは、' + esc(state.user.name) + ' さん</p>';
+
+  html += '<div class="stat3">' +
+    '<div class="card"><div class="num">' + d.books.length + '</div><div class="lbl">蔵書数</div></div>' +
+    '<div class="card"><div class="num">' + act.length + '</div><div class="lbl">貸出中</div></div>' +
+    '<div class="card"><div class="num">' + mine.length + '</div><div class="lbl">自分の貸出</div></div></div>';
+
+  if (overdue.length) {
+    html += '<div class="warn" style="margin-top:14px">⚠ 返却期限を過ぎている本が' + overdue.length + '冊あります。早めの返却をお願いします。</div>';
+  } else {
+    html += '<div style="height:14px"></div>';
+  }
+
+  // 新着お知らせ
+  var posts = (d.board || []).slice().sort(function (a, b) { return a['投稿日'] < b['投稿日'] ? 1 : -1; }).slice(0, 3);
+  html += '<div class="card"><h2><span class="bar"></span>新着お知らせ</h2>';
+  html += posts.length ? posts.map(function (p) {
+    return '<div class="loanitem"><div class="t">' + esc(p['タイトル']) + '</div>' +
+      '<div class="muted" style="white-space:pre-wrap">' + esc(p['本文']) + '</div>' +
+      '<div class="muted" style="margin-top:3px">' + fmtDate(p['投稿日']) + '</div></div>';
+  }).join('') : '<div class="empty">お知らせはまだありません</div>';
+  html += '</div>';
+
+  // 自分の貸出中
+  html += '<div class="card"><h2><span class="bar"></span>借りている本</h2>';
+  html += mine.length ? mine.map(loanItemHtml).join('') :
+    '<div class="empty">いま借りている本はありません<br><span class="muted">本棚から探してみましょう</span></div>';
+  html += '</div>';
+
+  $('view-home').innerHTML = html;
+}
+
+function loanItemHtml(l) {
+  var b = bookOf(l['ISBN']) || {};
+  var canExtend = !l['延長有無'];
+  return '<div class="loanitem"><div class="row">' +
+    '<div class="grow" onclick="openDetail(\'' + esc(l['ISBN']) + '\')">' +
+    '<div class="t">' + esc(b['タイトル'] || l['ISBN']) + '</div>' +
+    dueBadge(l['返却期限']) + ' <span class="muted">期限 ' + fmtDate(l['返却期限']) + '</span></div>' +
+    '<div style="display:flex;flex-direction:column;gap:6px">' +
+    '<button class="btn btn-red btn-sm" onclick="openReturn(\'' + esc(l['ID']) + '\')">返却</button>' +
+    (canExtend
+      ? '<button class="btn btn-gold btn-sm" onclick="doExtend(\'' + esc(l['ID']) + '\')">+1週間延長</button>'
+      : '<span class="muted" style="text-align:center">延長済み</span>') +
+    '</div></div></div>';
+}
+
+/* ---------- 本棚 ---------- */
+function setShelfTab(t) { state.shelfTab = t; renderShelf(); }
+function setGenre(g) { state.genre = g; renderShelf(); }
+
+function renderShelf() {
+  // ジャンルチップ
+  var gs = ['すべて'].concat(GENRES);
+  $('genreChips').innerHTML = gs.map(function (g) {
+    return '<button class="' + (state.genre === g ? 'on' : '') + '" onclick="setGenre(\'' + esc(g) + '\')">' + esc(g) + '</button>';
+  }).join('');
+  $('tabAvail').className = state.shelfTab === 'avail' ? 'on-avail' : '';
+  $('tabLoan').className = state.shelfTab === 'loan' ? 'on-loan' : '';
+
+  var q = ($('q').value || '').trim().toLowerCase();
+  var list = (state.data.books || []).filter(function (b) {
+    var onLoan = !!loanOf(b['ISBN']);
+    if (state.shelfTab === 'avail' && onLoan) return false;
+    if (state.shelfTab === 'loan' && !onLoan) return false;
+    if (state.genre !== 'すべて' && b['ジャンル'] !== state.genre) return false;
+    if (q && (String(b['タイトル']) + ' ' + String(b['著者'])).toLowerCase().indexOf(q) < 0) return false;
+    return true;
+  });
+
+  $('shelfEmpty').style.display = list.length ? 'none' : '';
+  $('shelfGrid').innerHTML = list.map(function (b) {
+    var l = loanOf(b['ISBN']);
+    var avg = avgRating(b['ISBN']);
+    return '<div class="book" onclick="openDetail(\'' + esc(b['ISBN']) + '\')">' +
+      (b['表紙URL']
+        ? '<img class="cover" src="' + esc(b['表紙URL']) + '" loading="lazy" onerror="this.outerHTML=\'<div class=&quot;cover noimg&quot;>📖</div>\'">'
+        : '<div class="cover noimg">📖</div>') +
+      '<div class="info"><div class="title">' + esc(b['タイトル']) + '</div>' +
+      '<div class="author">' + esc(b['著者'] || '') + '</div>' +
+      (l ? dueBadge(l['返却期限']) : '<span class="badge badge-ok">貸出可能</span>') +
+      (avg ? '<div class="star-inline" style="margin-top:4px">' + starsTxt(avg) + ' ' + avg.toFixed(1) + '</div>' : '') +
+      '</div></div>';
+  }).join('');
+}
+
+/* ---------- 本詳細 ---------- */
+function openDetail(isbn) {
+  var b = bookOf(isbn);
+  if (!b) return;
+  var l = loanOf(isbn);
+  var mineLoan = l && l['ユーザーID'] === state.user.userId;
+  var reserved = myReserves().some(function (r) { return String(r['ISBN']) === String(isbn); });
+  var avg = avgRating(isbn);
+  var rs = reviewsOf(isbn).slice().sort(function (a, b2) { return a['投稿日'] < b2['投稿日'] ? 1 : -1; });
+  var hist = (state.data.loans || []).filter(function (x) { return String(x['ISBN']) === String(isbn); })
+    .sort(function (a, b2) { return a['貸出日'] < b2['貸出日'] ? 1 : -1; });
+
+  var html = '<div class="row" style="align-items:flex-start">' +
+    (b['表紙URL'] ? '<img class="detail-cover" src="' + esc(b['表紙URL']) + '">' : '<div class="detail-cover" style="height:150px;background:var(--line);display:flex;align-items:center;justify-content:center;font-size:34px">📖</div>') +
+    '<div class="grow"><div style="font-size:15px;font-weight:800;line-height:1.4;margin-bottom:6px">' + esc(b['タイトル']) + '</div>' +
+    '<div class="kv">著者:<b>' + esc(b['著者'] || '-') + '</b><br>出版社:<b>' + esc(b['出版社'] || '-') + '</b><br>' +
+    '出版年月日:<b>' + esc(fmtDate(b['出版年月日']) || '-') + '</b><br>ジャンル:<b>' + esc(b['ジャンル'] || '-') + '</b></div>' +
+    '<div style="margin-top:8px">' + (l ? dueBadge(l['返却期限']) : '<span class="badge badge-ok">貸出可能</span>') +
+    (avg ? ' <span class="star-inline">' + starsTxt(avg) + ' ' + avg.toFixed(1) + '(' + rs.length + '件)</span>' : '') +
+    '</div></div></div>';
+
+  html += '<div style="margin:16px 0 6px">';
+  if (!l) {
+    html += '<button class="btn btn-red btn-block" onclick="doBorrow(\'' + esc(isbn) + '\')">この本を借りる(2週間)</button>';
+  } else if (mineLoan) {
+    html += '<button class="btn btn-red btn-block" onclick="openReturn(\'' + esc(l['ID']) + '\')">返却する</button>';
+  } else if (reserved) {
+    html += '<button class="btn btn-ghost btn-block" disabled>予約済み(返却されたらメールでお知らせ)</button>';
+  } else {
+    html += '<button class="btn btn-gold btn-block" onclick="doReserve(\'' + esc(isbn) + '\')">次に借りたい(予約する)</button>';
+  }
+  html += '</div>';
+
+  // 感想
+  html += '<div class="card" style="margin-top:14px"><h2><span class="bar"></span>みんなの感想</h2>';
+  html += rs.length ? rs.map(function (r) {
+    return '<div class="loanitem"><span class="star-inline">' + starsTxt(r['★']) + '</span> ' +
+      '<span class="muted">' + esc(userName(r['ユーザーID'])) + '・' + fmtDate(r['投稿日']) + '</span>' +
+      (r['コメント'] ? '<div style="font-size:13px;margin-top:3px">' + esc(r['コメント']) + '</div>' : '') + '</div>';
+  }).join('') : '<div class="empty">まだ感想はありません</div>';
+  html += '</div>';
+
+  // 履歴
+  html += '<div class="card"><h2><span class="bar"></span>貸出履歴(' + hist.length + '回)</h2>';
+  html += hist.length ? hist.map(function (h) {
+    return '<div class="loanitem" style="font-size:12px">' + esc(userName(h['ユーザーID'])) + ' ' +
+      '<span class="muted">' + fmtDate(h['貸出日']) + ' 〜 ' + (h['返却日'] ? fmtDate(h['返却日']) : '貸出中') +
+      (h['延長有無'] ? '(延長)' : '') + '</span></div>';
+  }).join('') : '<div class="empty">まだ貸出履歴はありません</div>';
+  html += '</div>';
+
+  $('detailBody').innerHTML = html;
+  showOv('ovDetail');
+}
+
+/* ---------- 貸出・返却・延長・予約 ---------- */
+function doBorrow(isbn) {
+  api('borrow', { userId: state.user.userId, isbn: isbn }).then(function (res) {
+    hide('ovDetail');
+    toast('借りました!返却期限は ' + fmtDate(res.due) + ' です');
+    return loadAll();
+  }).catch(function (e) { toast(e.message); });
+}
+
+function openReturn(loanId) {
+  hide('ovDetail');
+  state.retLoanId = loanId;
+  state.retRating = 0;
+  var l = (state.data.loans || []).filter(function (x) { return x['ID'] === loanId; })[0];
+  var b = l ? bookOf(l['ISBN']) : null;
+  $('retTitle').textContent = b ? '「' + b['タイトル'] + '」を返却します' : '';
+  $('retComment').value = '';
+  renderStars();
+  showOv('ovReturn');
+}
+
+function renderStars() {
+  var el = $('retStars');
+  el.innerHTML = '';
+  for (var i = 1; i <= 5; i++) {
+    var s = document.createElement('span');
+    s.textContent = '★';
+    s.className = i <= state.retRating ? 'on' : '';
+    (function (n) { s.onclick = function () { state.retRating = n; renderStars(); }; })(i);
+    el.appendChild(s);
+  }
+}
+
+function submitReturn(withRating) {
+  var payload = { userId: state.user.userId, loanId: state.retLoanId };
+  if (withRating && state.retRating > 0) {
+    payload.rating = state.retRating;
+    payload.comment = $('retComment').value.trim();
+  }
+  api('returnBook', payload).then(function () {
+    hide('ovReturn');
+    toast('返却しました。ありがとうございました!');
+    return loadAll();
+  }).catch(function (e) { toast(e.message); });
+}
+
+function doExtend(loanId) {
+  api('extend', { userId: state.user.userId, loanId: loanId }).then(function (res) {
+    toast('1週間延長しました。新しい期限は ' + fmtDate(res.due) + ' です');
+    return loadAll();
+  }).catch(function (e) { toast(e.message); });
+}
+
+function doReserve(isbn) {
+  api('reserve', { userId: state.user.userId, isbn: isbn }).then(function () {
+    hide('ovDetail');
+    toast('予約しました。返却されたらメールでお知らせします');
+    return loadAll();
+  }).catch(function (e) { toast(e.message); });
+}
+
+function doCancelReserve(id) {
+  api('cancelReserve', { userId: state.user.userId, reserveId: id }).then(function () {
+    toast('予約を取り消しました');
+    return loadAll();
+  }).catch(function (e) { toast(e.message); });
+}
+
+/* ---------- ランキング ---------- */
+function renderRanking() {
+  var counts = {};
+  (state.data.loans || []).forEach(function (l) {
+    counts[String(l['ISBN'])] = (counts[String(l['ISBN'])] || 0) + 1;
+  });
+  var top = Object.keys(counts).map(function (isbn) {
+    return { isbn: isbn, count: counts[isbn], book: bookOf(isbn), avg: avgRating(isbn) };
+  }).filter(function (x) { return x.book; })
+    .sort(function (a, b) { return b.count - a.count; }).slice(0, 10);
+
+  $('rankList').innerHTML = top.length ? top.map(function (x, i) {
+    return '<div class="loanitem row" onclick="openDetail(\'' + esc(x.isbn) + '\')">' +
+      '<div class="rankno ' + (i === 0 ? 'top1' : i === 1 ? 'top2' : i === 2 ? 'top3' : '') + '">' + (i + 1) + '</div>' +
+      '<div class="grow"><div class="t">' + esc(x.book['タイトル']) + '</div>' +
+      '<span class="muted">貸出 ' + x.count + '回</span>' +
+      (x.avg ? ' <span class="star-inline">' + starsTxt(x.avg) + ' ' + x.avg.toFixed(1) + '</span>' : '') +
+      '</div></div>';
+  }).join('') : '<div class="empty">まだ貸出データがありません</div>';
+}
+
+/* ---------- リクエスト ---------- */
+function sendRequest() {
+  var title = $('reqTitle').value.trim();
+  if (!title) { toast('タイトルを入力してください'); return; }
+  api('addRequest', { userId: state.user.userId, title: title, reason: $('reqReason').value.trim() })
+    .then(function () {
+      $('reqTitle').value = ''; $('reqReason').value = '';
+      toast('リクエストを送りました!');
+      return loadAll();
+    }).catch(function (e) { toast(e.message); });
+}
+
+function renderRequests() {
+  var mine = (state.data.requests || []).filter(function (r) { return r['ユーザーID'] === state.user.userId; })
+    .sort(function (a, b) { return a['投稿日'] < b['投稿日'] ? 1 : -1; });
+  $('myRequests').innerHTML = mine.length ? mine.map(function (r) {
+    return '<div class="loanitem"><div class="row"><div class="grow"><div class="t">' + esc(r['タイトル']) + '</div>' +
+      (r['理由'] ? '<div class="muted">' + esc(r['理由']) + '</div>' : '') +
+      '<div class="muted">' + fmtDate(r['投稿日']) + '</div></div>' +
+      (r['ステータス'] === '対応済み'
+        ? '<span class="badge badge-ok">対応済み</span>'
+        : '<span class="badge badge-gold">未対応</span>') +
+      '</div></div>';
+  }).join('') : '<div class="empty">まだリクエストはありません</div>';
+}
+
+/* ---------- マイページ ---------- */
+function renderMyPage() {
+  var mine = myLoans();
+  var resv = myReserves();
+  var html = '<div class="card"><h2><span class="bar"></span>プロフィール</h2>' +
+    '<div class="kv">名前:<b>' + esc(state.user.name) + '</b><br>メール:<b>' + esc(state.user.email || '') + '</b></div></div>';
+
+  html += '<div class="card"><h2><span class="bar"></span>借りている本(' + mine.length + '/' + state.data.config.maxLoans + '冊)</h2>';
+  html += mine.length ? mine.map(loanItemHtml).join('') : '<div class="empty">いま借りている本はありません</div>';
+  html += '</div>';
+
+  html += '<div class="card"><h2><span class="bar"></span>予約中(' + resv.length + '/' + state.data.config.maxReserves + '冊)</h2>';
+  html += resv.length ? resv.map(function (r) {
+    var b = bookOf(r['ISBN']) || {};
+    return '<div class="loanitem row"><div class="grow"><div class="t">' + esc(b['タイトル'] || r['ISBN']) + '</div>' +
+      '<span class="muted">予約日 ' + fmtDate(r['予約日']) + '</span> ' +
+      (r['通知済みフラグ'] ? '<span class="badge badge-ok">返却済・貸出可能!</span>' : '<span class="badge badge-gold">貸出中</span>') +
+      '</div><button class="btn btn-ghost btn-sm" onclick="doCancelReserve(\'' + esc(r['ID']) + '\')">取消</button></div>';
+  }).join('') : '<div class="empty">予約はありません</div>';
+  html += '</div>';
+
+  $('view-mypage').innerHTML = html;
+}
+
+/* ---------- 管理者 ---------- */
+function onAdminBtn() {
+  if (state.admin) {
+    if (confirm('管理者モードを終了しますか?')) {
+      state.admin = '';
+      sessionStorage.removeItem('hondana_admin');
+      updateAdminUi();
+      show('home');
+    }
+  } else {
+    $('adminPw').value = '';
+    showOv('ovAdmin');
+  }
+}
+
+function adminLogin() {
+  var pw = $('adminPw').value;
+  api('adminCheck', { password: pw }).then(function () {
+    state.admin = pw;
+    sessionStorage.setItem('hondana_admin', pw);
+    hide('ovAdmin');
+    updateAdminUi();
+    toast('管理者モードになりました');
+    show('admin');
+  }).catch(function (e) { toast(e.message); });
+}
+
+function updateAdminUi() {
+  $('adminBtn').classList.toggle('on', !!state.admin);
+  document.querySelector('nav button[data-v="admin"]').classList.toggle('hidden', !state.admin);
+}
+
+function renderAdmin() {
+  if (!state.admin) { $('view-admin').innerHTML = '<div class="empty">管理者モードではありません</div>'; return; }
+  var d = state.data;
+  var act = activeLoans();
+  var overdue = act.filter(function (l) { return daysLeft(l['返却期限']) < 0; });
+  var reqs = (d.requests || []).slice().sort(function (a, b) { return a['投稿日'] < b['投稿日'] ? 1 : -1; });
+
+  var html = '';
+
+  // 本の登録
+  html += '<div class="card adminsec"><h2><span class="bar"></span>本の登録</h2>' +
+    '<div style="display:flex;gap:10px;margin-bottom:10px">' +
+    '<button class="btn btn-red" style="flex:1" onclick="startScan()">📷 バーコードスキャン</button>' +
+    '<button class="btn btn-ghost" style="flex:1" onclick="openBookForm(null)">手動で入力</button></div>' +
+    '<div id="bookForm"></div></div>';
+
+  // 掲示板投稿
+  html += '<div class="card adminsec"><h2><span class="bar"></span>掲示板に投稿(入荷お知らせ)</h2>' +
+    '<label>タイトル</label><input id="postTitle" placeholder="例:新刊が3冊入りました!">' +
+    '<label>本文</label><textarea id="postBody" placeholder="入荷した本の紹介など"></textarea>' +
+    '<div style="margin-top:12px"><button class="btn btn-gold btn-block" onclick="adminPost()">投稿する</button></div></div>';
+
+  // 貸出状況
+  html += '<div class="card adminsec"><h2><span class="bar"></span>貸出状況(' + act.length + '件' +
+    (overdue.length ? ' / <span style="color:var(--red)">延滞' + overdue.length + '件</span>' : '') + ')</h2>';
+  html += act.length ? act.map(function (l) {
+    var b = bookOf(l['ISBN']) || {};
+    return '<div class="loanitem"><div class="t">' + esc(b['タイトル'] || l['ISBN']) + '</div>' +
+      '<span class="muted">' + esc(userName(l['ユーザーID'])) + '・期限 ' + fmtDate(l['返却期限']) + '</span> ' +
+      dueBadge(l['返却期限']) + '</div>';
+  }).join('') : '<div class="empty">貸出中の本はありません</div>';
+  html += '</div>';
+
+  // リクエスト管理
+  html += '<div class="card adminsec"><h2><span class="bar"></span>入荷リクエスト管理</h2>';
+  html += reqs.length ? reqs.map(function (r) {
+    return '<div class="loanitem"><div class="row"><div class="grow"><div class="t">' + esc(r['タイトル']) + '</div>' +
+      '<div class="muted">' + esc(userName(r['ユーザーID'])) + '・' + fmtDate(r['投稿日']) +
+      (r['理由'] ? '<br>' + esc(r['理由']) : '') + '</div></div>' +
+      (r['ステータス'] === '対応済み'
+        ? '<button class="btn btn-ghost btn-sm" onclick="setReqStatus(\'' + esc(r['ID']) + '\',\'未対応\')">対応済み✓</button>'
+        : '<button class="btn btn-gold btn-sm" onclick="setReqStatus(\'' + esc(r['ID']) + '\',\'対応済み\')">対応済みにする</button>') +
+      '</div></div>';
+  }).join('') : '<div class="empty">リクエストはありません</div>';
+  html += '</div>';
+
+  // 蔵書管理
+  html += '<div class="card adminsec"><h2><span class="bar"></span>蔵書管理(' + d.books.length + '冊)</h2>';
+  html += d.books.length ? d.books.map(function (b) {
+    return '<div class="loanitem row"><div class="grow"><div class="t">' + esc(b['タイトル']) + '</div>' +
+      '<span class="muted">' + esc(b['ジャンル'] || '') + '・' + esc(b['著者'] || '') + '</span></div>' +
+      '<button class="btn btn-ghost btn-sm" onclick="openBookForm(\'' + esc(b['ISBN']) + '\')">編集</button>' +
+      '<button class="btn btn-red btn-sm" onclick="adminDeleteBook(\'' + esc(b['ISBN']) + '\')">削除</button></div>';
+  }).join('') : '<div class="empty">蔵書はまだありません</div>';
+  html += '</div>';
+
+  $('view-admin').innerHTML = html;
+}
+
+/* --- 本フォーム(登録/編集) --- */
+function openBookForm(isbn, prefill) {
+  state.editIsbn = isbn;
+  var b = isbn ? (bookOf(isbn) || {}) : (prefill || {});
+  var el = $('bookForm');
+  if (!el) { show('admin'); el = $('bookForm'); }
+  el.innerHTML =
+    '<div style="border-top:1px solid var(--line);margin-top:6px;padding-top:4px">' +
+    '<label>ISBN</label><input id="bfIsbn" value="' + esc(b['ISBN'] || '') + '" ' + (isbn ? 'disabled' : 'placeholder="978..."') + '>' +
+    (isbn ? '' : '<div style="margin-top:8px"><button class="btn btn-ghost btn-sm" onclick="lookupIsbn()">Google Booksから自動取得</button></div>') +
+    '<label>タイトル <span class="req">*</span></label><input id="bfTitle" value="' + esc(b['タイトル'] || '') + '">' +
+    '<label>著者</label><input id="bfAuthor" value="' + esc(b['著者'] || '') + '">' +
+    '<label>出版社 <span class="req">*</span></label><input id="bfPub" value="' + esc(b['出版社'] || '') + '">' +
+    '<label>出版年月日 <span class="req">*</span></label><input id="bfDate" value="' + esc(b['出版年月日'] || '') + '" placeholder="2024-01-01">' +
+    '<label>表紙URL <span class="req">*</span></label><input id="bfCover" value="' + esc(b['表紙URL'] || '') + '" placeholder="https://...">' +
+    '<label>ジャンル</label><select id="bfGenre">' + GENRES.map(function (g) {
+      return '<option' + (b['ジャンル'] === g ? ' selected' : '') + '>' + g + '</option>';
+    }).join('') + '</select>' +
+    '<div style="display:flex;gap:10px;margin-top:14px">' +
+    '<button class="btn btn-ghost" style="flex:1" onclick="$(\'bookForm\').innerHTML=\'\'">閉じる</button>' +
+    '<button class="btn btn-red" style="flex:1" onclick="saveBook()">' + (isbn ? '更新する' : '登録する') + '</button></div></div>';
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function lookupIsbn() {
+  var isbn = $('bfIsbn').value.replace(/[^0-9Xx]/g, '');
+  if (!isbn) { toast('ISBNを入力するかスキャンしてください'); return; }
+  fetchBookInfo(isbn).then(function (info) {
+    if (!info) { toast('Google Booksで見つかりませんでした。手動で入力してください'); return; }
+    $('bfTitle').value = info.title || $('bfTitle').value;
+    $('bfAuthor').value = info.author || $('bfAuthor').value;
+    $('bfPub').value = info.publisher || $('bfPub').value;
+    $('bfDate').value = info.date || $('bfDate').value;
+    $('bfCover').value = info.cover || $('bfCover').value;
+    toast('書籍情報を取得しました。不足分は手動で補完してください');
+  });
+}
+
+function fetchBookInfo(isbn) {
+  return fetch('https://www.googleapis.com/books/v1/volumes?q=isbn:' + encodeURIComponent(isbn) + '&country=JP')
+    .then(function (r) { return r.json(); })
+    .then(function (j) {
+      var v = j.items && j.items[0] && j.items[0].volumeInfo;
+      if (!v) return null;
+      return {
+        title: v.title || '',
+        author: (v.authors || []).join('、'),
+        publisher: v.publisher || '',
+        date: v.publishedDate || '',
+        cover: v.imageLinks ? String(v.imageLinks.thumbnail || '').replace(/^http:/, 'https:') : ''
+      };
+    }).catch(function () { return null; });
+}
+
+function saveBook() {
+  var book = {
+    'ISBN': $('bfIsbn').value.replace(/[^0-9Xx]/g, ''),
+    'タイトル': $('bfTitle').value.trim(),
+    '著者': $('bfAuthor').value.trim(),
+    '出版社': $('bfPub').value.trim(),
+    '出版年月日': $('bfDate').value.trim(),
+    '表紙URL': $('bfCover').value.trim(),
+    'ジャンル': $('bfGenre').value
+  };
+  if (!book['タイトル'] || !book['出版社'] || !book['出版年月日'] || !book['表紙URL']) {
+    toast('タイトル・出版社・出版年月日・表紙URLは必須です'); return;
+  }
+  var p = state.editIsbn
+    ? api('updateBook', { password: state.admin, isbn: state.editIsbn, book: book })
+    : api('addBook', { password: state.admin, book: book });
+  p.then(function () {
+    toast(state.editIsbn ? '更新しました' : '登録しました!');
+    state.editIsbn = null;
+    return loadAll();
+  }).catch(function (e) { toast(e.message); });
+}
+
+function adminDeleteBook(isbn) {
+  var b = bookOf(isbn);
+  if (!confirm('「' + (b ? b['タイトル'] : isbn) + '」を削除しますか?')) return;
+  api('deleteBook', { password: state.admin, isbn: isbn }).then(function () {
+    toast('削除しました');
+    return loadAll();
+  }).catch(function (e) { toast(e.message); });
+}
+
+function adminPost() {
+  var title = $('postTitle').value.trim();
+  if (!title) { toast('タイトルを入力してください'); return; }
+  api('addPost', { password: state.admin, title: title, body: $('postBody').value.trim() }).then(function () {
+    toast('投稿しました!');
+    return loadAll();
+  }).catch(function (e) { toast(e.message); });
+}
+
+function setReqStatus(id, status) {
+  api('setRequestStatus', { password: state.admin, requestId: id, status: status }).then(function () {
+    return loadAll();
+  }).catch(function (e) { toast(e.message); });
+}
+
+/* ---------- バーコードスキャン(ZXing) ---------- */
+function startScan() {
+  if (!window.ZXing) { toast('スキャンライブラリの読込に失敗しました'); return; }
+  showScanner();
+}
+
+function showScanner() {
+  $('scanBox').classList.add('show');
+  state.scanner = new ZXing.BrowserMultiFormatReader();
+  state.scanner.decodeFromVideoDevice(undefined, 'scanVideo', function (result) {
+    if (!result) return;
+    var code = result.getText();
+    if (!/^97[89]\d{10}$/.test(code)) return;  // ISBNバーコード(978/979)のみ受付
+    if (navigator.vibrate) navigator.vibrate(80);
+    stopScan();
+    toast('ISBN読取:' + code);
+    fetchBookInfo(code).then(function (info) {
+      openBookForm(null, info ? {
+        'ISBN': code, 'タイトル': info.title, '著者': info.author,
+        '出版社': info.publisher, '出版年月日': info.date, '表紙URL': info.cover
+      } : { 'ISBN': code });
+      if (!info) toast('Google Booksで見つかりませんでした。手動で入力してください');
+    });
+  });
+}
+
+function stopScan() {
+  if (state.scanner) { try { state.scanner.reset(); } catch (e) {} state.scanner = null; }
+  $('scanBox').classList.remove('show');
+}
+
+/* ---------- 起動 ---------- */
+function init() {
+  var saved = localStorage.getItem('hondana_user');
+  if (saved) { try { state.user = JSON.parse(saved); } catch (e) {} }
+  updateAdminUi();
+  if (!state.user || !state.user.userId) {
+    $('nav').style.display = 'none';
+    document.querySelectorAll('.view').forEach(function (el) { el.classList.remove('show'); });
+    $('view-register').classList.add('show');
+    return;
+  }
+  show('home');
+  loadAll();
+}
+
+init();
+</script>
+</body>
+</html>
